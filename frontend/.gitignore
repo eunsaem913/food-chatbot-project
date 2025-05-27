@@ -33,3 +33,7 @@ food-chatbot-web-firebase-adminsdk-fbsvc-668ab84240.json
 
 # VS Code 설정 (선택)
 .vscode/
+
+*.json
+!frontend/package.json
+node_modules/
