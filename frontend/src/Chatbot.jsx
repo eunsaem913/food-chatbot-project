@@ -53,15 +53,16 @@ export default function Chatbot() {
     setUserInput('');
 
     try {
-      const res = await fetch('http://localhost:8000/chat', {
+      const res = await fetch('https://food-chatbot-project.onrender.com/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: "test_user",
           messages: newMessages,
-          address: userAddress // 유지 (맛집 추천용)
+          address: userAddress
         })
       });
+
 
       if (!res.ok) throw new Error("서버 응답 오류");
 
