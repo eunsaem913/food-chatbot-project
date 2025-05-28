@@ -2,8 +2,3 @@ fastapi
 uvicorn
 openai
 python-dotenv
-
-pip install python-dotenv openai --force-reinstall
-
-.\venv\Scripts\activate
-uvicorn main:app --reload --port 8000
