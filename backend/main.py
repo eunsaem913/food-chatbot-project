@@ -8,15 +8,23 @@ from datetime import datetime
 import requests
 import traceback
 import re
+import json
 
 # -------------------------------
 # 환경변수 및 Firebase 설정
 # -------------------------------
 load_dotenv()
 
-cred = credentials.Certificate("food-chatbot-web-firebase-adminsdk-fbsvc-668ab84240.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+cred_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+if cred_json:
+    cred_dict = json.loads(cred_json)
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    print("✅ Firebase Admin Initialized")
+else:
+    print("❌ Firebase Admin Key not found!")
+    db = None  # db 객체를 None으로 초기화해서 오류 방지
 
 # -------------------------------
 # FastAPI 설정
@@ -35,20 +43,23 @@ app.add_middleware(
 # 메시지 저장 / 불러오기 함수
 # -------------------------------
 def save_message(user_id: str, role: str, content: str):
-    db.collection("chat_history").add({
-        "user_id": user_id,
-        "role": role,
-        "content": content,
-        "timestamp": firestore.SERVER_TIMESTAMP
-    })
+    if db:
+        db.collection("chat_history").add({
+            "user_id": user_id,
+            "role": role,
+            "content": content,
+            "timestamp": firestore.SERVER_TIMESTAMP
+        })
 
 def get_recent_messages(user_id: str, limit=20):
-    chats = db.collection("chat_history") \
-              .where("user_id", "==", user_id) \
-              .order_by("timestamp", direction=firestore.Query.DESCENDING) \
-              .limit(limit) \
-              .stream()
-    return [{"role": c.get("role"), "content": c.get("content")} for c in chats]
+    if db:
+        chats = db.collection("chat_history") \
+                  .where("user_id", "==", user_id) \
+                  .order_by("timestamp", direction=firestore.Query.DESCENDING) \
+                  .limit(limit) \
+                  .stream()
+        return [{"role": c.get("role"), "content": c.get("content")} for c in chats]
+    return []
 
 def extract_feedback_messages(history):
     feedback_keywords = ["묻지 마", "묻지마", "왜 자꾸", "하지 마", "하지마", "물어보지 마"]
@@ -122,29 +133,20 @@ def search_nearby_restaurants(food_keyword, lat, lng, count=5):
 # -------------------------------
 # 음식 키워드 추출 함수
 # -------------------------------
-import re
-
 def extract_food_keyword(reply_text):
-    """
-    GPT 응답에서 음식 이름 1개를 추출하는 함수.
-    다양한 형식 (숫자, 하이픈, 불릿 등)을 인식함.
-    """
     lines = reply_text.split("\n")
     candidates = []
 
     for line in lines:
-        # 숫자나 기호로 시작하는 줄에서 음식명 추출
         match = re.match(r"^\s*(\d+[\).]|[-•*])\s*([^\n]+)", line.strip())
         if match:
             candidates.append(match.group(2).strip())
-        # "추천 음식: 김치찌개" 형식도 인식
         elif "추천" in line and ":" in line:
             parts = line.split(":")
             if len(parts) == 2:
                 candidates.append(parts[1].strip())
 
     return candidates[0] if candidates else None
-
 
 # -------------------------------
 # GPT 채팅 API
@@ -182,11 +184,10 @@ async def chat(request: Request):
         if address:
             lat, lng = geocode_address(address)
             if lat and lng:
-                food_keyword = extract_food_keyword(reply) or "비빔밥"  # 기본 음식 키워드 추가
+                food_keyword = extract_food_keyword(reply) or "비빔밥"
                 nearby = search_nearby_restaurants(food_keyword, lat, lng)
                 if nearby:
                     reply += "\n\n📍 근처 맛집 추천:\n" + "\n".join(nearby)
-
 
         return {"reply": reply}
 
